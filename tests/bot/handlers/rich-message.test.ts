@@ -173,3 +173,48 @@ describe("bot/handlers/rich-message-handler", () => {
     ]);
   });
 });
+
+describe("getIncomingPrompt and the message being answered", () => {
+  it("prepends what a reply is answering", () => {
+    const ctx = {
+      message: {
+        text: "test",
+        reply_to_message: { text: "The plan goes with the trade." },
+      },
+    } as unknown as Context;
+
+    expect(getIncomingPrompt(ctx)).toEqual({
+      text: '[replying to: "The plan goes with the trade."]\n\ntest',
+      fileParts: [],
+      photos: [],
+    });
+  });
+
+  it("uses a caption when the quoted message is a photo", () => {
+    const ctx = {
+      message: { text: "test", reply_to_message: { caption: "the entry picture" } },
+    } as unknown as Context;
+
+    expect(getIncomingPrompt(ctx)?.text).toBe(
+      '[replying to: "the entry picture"]\n\ntest',
+    );
+  });
+
+  it("leaves a message that is not a reply exactly as it was", () => {
+    const ctx = { message: { text: "test" } } as unknown as Context;
+
+    expect(getIncomingPrompt(ctx)?.text).toBe("test");
+  });
+
+  it("collapses the quote and cuts it at 300 characters", () => {
+    const ctx = {
+      message: { text: "test", reply_to_message: { text: "a\n\nb  " + "c".repeat(400) } },
+    } as unknown as Context;
+
+    const text = getIncomingPrompt(ctx)?.text ?? "";
+    const quote = text.slice('[replying to: "'.length, text.indexOf('"]'));
+    expect(quote.startsWith("a b ")).toBe(true);
+    expect(quote.length).toBe(300);
+    expect(text.endsWith('"]\n\ntest')).toBe(true);
+  });
+});

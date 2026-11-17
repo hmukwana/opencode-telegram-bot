@@ -34,6 +34,26 @@ export function setIncomingPrompt(ctx: Context, input: IncomingPrompt): void {
   (ctx as ContextWithIncomingPrompt)[incomingPromptKey] = input;
 }
 
+/** What a reply is answering, as one flat line.
+ *
+ * Telegram hands the replied-to message along as `reply_to_message`, and the
+ * bot used to drop it: a reply arrived as bare text and nobody could tell
+ * which message it belonged to. The prompt carries it inline, trimmed, because
+ * the agent reads the prompt and not the update.
+ */
+function replyQuote(message: Context["message"]): string {
+  const quoted = message?.reply_to_message;
+  if (!quoted) {
+    return "";
+  }
+  const text = quoted.text ?? quoted.caption;
+  if (typeof text !== "string") {
+    return "";
+  }
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 300 ? flat.slice(0, 300) : flat;
+}
+
 export function getIncomingPrompt(ctx: Context): IncomingPrompt | null {
   const stored = (ctx as ContextWithIncomingPrompt)[incomingPromptKey];
   if (stored) {
@@ -41,7 +61,11 @@ export function getIncomingPrompt(ctx: Context): IncomingPrompt | null {
   }
 
   const text = ctx.message?.text;
-  return text === undefined ? null : createIncomingPrompt(text);
+  if (text === undefined) {
+    return null;
+  }
+  const quote = replyQuote(ctx.message);
+  return createIncomingPrompt(quote ? `[replying to: "${quote}"]\n\n${text}` : text);
 }
 
 export async function normalizeRichMessage(
